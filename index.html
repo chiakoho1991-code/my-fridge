@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>我的智能冰箱</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .no-scrollbar::-webkit-scrollbar {
+                display: none;
+            }
+            .no-scrollbar {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+            .pb-safe {
+                padding-bottom: env(safe-area-inset-bottom);
+            }
+            .animate-fade-in {
+                animation: fadeIn 0.3s ease-in-out;
+            }
+            .animate-fade-in-up {
+                animation: fadeInUp 0.3s ease-out;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            @keyframes fadeInUp {
+                from { opacity: 0; transform: translateY(20px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+        }
+        body {
+            background-color: #FDF5E6;
+            -webkit-tap-highlight-color: transparent;
+        }
+    </style>
+
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "lucide-react": "https://esm.sh/lucide-react@0.292.0"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+        import ReactDOM from 'react-dom/client';
+        import { Plus, Trash2, ChefHat, Refrigerator, BookOpen, X, RefreshCw, LayoutTemplate, CalendarClock, AlertTriangle, UtensilsCrossed, Check, Pencil, CookingPot, AlertCircle, Soup, Utensils, CheckCircle2, ArrowRightLeft, Ban, Lock, HeartHandshake, Undo2, Filter, AlertOctagon, Coffee, Smile, BookHeart, ClipboardList, MinusCircle, Snowflake, ThermometerSnowflake, Download } from 'lucide-react';
+
+        // --- 初始資料 ---
+        const CATEGORIES = ['蔬菜', '水果', '蛋、奶、乳製品', '肉品海鮮', '油調味', '罐頭、調理食品', '米、麵'];
+        const RECIPE_TYPES = ['主菜', '配菜', '湯品', '主食', '一鍋到底', '甜點'];
+        const STAPLE_OPTIONS = ['白飯', '麵條', '冬粉', '饅頭'];
+        const STORAGE_TYPES = ['冷藏', '冷凍', '常溫'];
+
+        // 完整食譜資料
+        const INITIAL_RECIPES = [
+          {
+            id: '10', name: '瓜仔肉蒸豆腐', type: '主菜', ingredients: ['絞肉', '板豆腐', '脆瓜', '蔥'],
+            steps: '【食材】絞肉350g、板豆腐300g、脆瓜50g、脆瓜汁20g、馬鈴薯粉1小匙、香蔥酥醬1大匙、白胡椒粉1/3小匙、鹽1/2小匙、醬油1大匙\n\n1. 脆瓜切碎，與絞肉、脆瓜汁及所有調味料拌勻摔打出筋。\n2. 板豆腐切片鋪在盤底。\n3. 將肉餡鋪在豆腐上，入電鍋蒸熟，撒上蔥花。'
+          },
+          {
+            id: '11', name: '蠔油冬瓜雙菇', type: '配菜', ingredients: ['冬瓜', '香菇', '杏鮑菇', '蠔油'],
+            steps: '【食材】冬瓜400g、香菇85g、杏鮑菇130g、蠔油2大匙、鹽1/2小匙、白胡椒粉1/3小匙\n\n1. 冬瓜去皮切塊，香菇、杏鮑菇切片。\n2. 熱鍋炒香菇類。\n3. 加入冬瓜與少許水悶煮至軟爛。\n4. 加入蠔油及調味料拌炒均勻收汁。'
+          },
+          {
+            id: '12', name: '櫛瓜沙茶雞丁', type: '主菜', ingredients: ['雞肉', '櫛瓜', '沙茶醬', '米酒'],
+            steps: '【食材】雞肉300g、櫛瓜一根、沙茶醬2大匙、鹽1/2小匙、白胡椒粉1/3小匙、米酒1大匙、醬油1大匙、馬鈴薯粉1大匙\n\n1. 雞肉切丁，用醬油、米酒、粉抓醃。\n2. 熱鍋將雞丁炒至變色。\n3. 加入切塊的櫛瓜翻炒。\n4. 加入沙茶醬與其他調味料炒勻即可。'
+          },
+          {
+            id: '13', name: '茄汁鮮蔬魚片湯', type: '湯品', ingredients: ['鯖魚罐頭', '南瓜', '魚片', '香菇', '蘋果醋'],
+            steps: '【食材】鯖魚罐頭2罐、南瓜400g、魚片200g(鹽1/3小匙抓醃)、香菇2朵、水1200g、鹽1小匙、白胡椒粉1/2小匙、蘋果醋1大匙\n\n1. 水滾後放入南瓜、香菇煮軟。\n2. 倒入鯖魚罐頭(含汁)。\n3. 再次滾開後放入魚片燙熟。\n4. 起鍋前加入醋與調味料。'
+          },
+          {
+            id: '14', name: '蔬菜肉片味噌湯', type: '湯品', ingredients: ['豬五花', '南瓜', '玉米筍', '秋葵', '洋蔥', '高麗菜', '味噌'],
+            steps: '【食材】豬五花170g、南瓜150g、玉米筍100g、秋葵200g、洋蔥160g、高麗菜260g、味噌120g、水1300cc、蘋果醋1大匙、醬油1小匙\n\n1. 水滾後放入所有蔬菜煮熟。\n2. 放入豬五花肉片涮熟。\n3. 關火，將味噌溶解入鍋，加入調味料拌勻。'
+          },
+          {
+            id: '15', name: '三杯蒸雞', type: '主菜', ingredients: ['雞肉', '薑', '蒜頭', '麻油', '醬油'],
+            steps: '【食材】雞肉500g、鹽1/2小匙、醬油2大匙、醬油膏1大匙、米酒1大匙、薑20g、蒜頭30g、麻油2小匙、馬鈴薯粉1大匙\n\n1. 薑切片，蒜頭拍扁。\n2. 雞肉與所有調味料、薑蒜抓醃均勻。\n3. 放入電鍋蒸熟即可 (外鍋約1杯水)。'
+          },
+          {
+            id: '16', name: '絲瓜溜魚片', type: '主菜', ingredients: ['絲瓜', '魚片', '甘樹子', '蔥'],
+            steps: '【食材】絲瓜500g、魚片200g、甘樹子80g、橄欖油1大匙、鹽1/2小匙、蔥花適量\n\n1. 絲瓜去皮切塊，魚片稍微抓醃。\n2. 熱鍋炒絲瓜，加少許水與甘樹子悶煮。\n3. 絲瓜軟後放入魚片燙熟。\n4. 加鹽調味，撒上蔥花。'
+          },
+          {
+            id: '17', name: '海苔杏鮑菇', type: '配菜', ingredients: ['杏鮑菇', '海苔醬', '小蕃茄'],
+            steps: '【食材】杏鮑菇250g、海苔醬、小蕃茄數顆\n\n1. 杏鮑菇切滾刀塊或是厚片。\n2. 乾鍋煸炒杏鮑菇至出水再收乾金黃。\n3. 拌入海苔醬均勻裹上。\n4. 盛盤佐以小蕃茄裝飾。'
+          },
+          {
+            id: '18', name: '咖喱飯', type: '一鍋到底', ingredients: ['雞肉', '花椰菜', '咖喱塊', '玉蜀黍', '甜椒', '紅蘿蔔', '馬鈴薯', '洋蔥', '白飯'],
+            steps: '【食材】雞肉、花椰菜、咖喱塊、玉蜀黍、甜椒、紅蘿蔔、馬鈴薯、洋蔥、白飯\n\n1. 雞肉與蔬菜切塊。\n2. 熱鍋炒香洋蔥與雞肉。\n3. 加入根莖類蔬菜與水燉煮。\n4. 煮軟後加入易熟蔬菜(甜椒/花椰菜/玉蜀黍)。\n5. 關火加入咖喱塊溶解，開小火煮至濃稠，淋在白飯上。'
+          },
+          {
+            id: '0', name: '白飯', type: '主食', ingredients: ['白米'],
+            steps: '1. 洗米。\n2. 放入電鍋，米水比例 1:1。\n3. 按下開關煮熟，跳起後悶10分鐘。'
+          },
+          {
+            id: '01', name: '乾拌麵', type: '主食', ingredients: ['麵條', '醬油', '蔥'],
+            steps: '1. 水滾下麵條煮熟撈起。\n2. 拌入醬油、麻油與蔥花。'
+          }
+        ];
+
+        const getFutureDate = (days) => {
+          const date = new Date();
+          date.setDate(date.getDate() + days);
+          return date.toISOString().split('T')[0];
+        };
+
+        // 預設庫存 (僅在第一次且無舊資料時使用)
+        const INITIAL_FRIDGE = [
+          { id: '100', name: '白米', category: '米、麵', quantity: 1, expiry: '2025-12-31', storage: '常溫' }
+        ];
+
+        // --- 固定金鑰 (Master Keys - LocalStorage) ---
+        const DB_KEYS = {
+            FRIDGE: 'mrsOu_inventory_MASTER',
+            RECIPES: 'mrsOu_recipes_MASTER',
+            MENU: 'mrsOu_todayMenu_MASTER'
+        };
+
+        // --- 舊資料救援與讀取 ---
+        const loadDataWithRescue = (masterKey, initialValue, type) => {
+            try {
+                // 1. 優先讀取 MASTER (v30 以後的標準位置)
+                const masterData = localStorage.getItem(masterKey);
+                if (masterData !== null) { 
+                    return JSON.parse(masterData);
+                }
+
+                // 2. 若無 MASTER，嘗試從舊版本救援
+                const prefixMap = {
+                    [DB_KEYS.FRIDGE]: 'fridge',
+                    [DB_KEYS.RECIPES]: 'recipes',
+                    [DB_KEYS.MENU]: 'todayMenu'
+                };
+                const prefix = prefixMap[masterKey];
+                
+                if (prefix) {
+                    for (let i = 30; i >= 10; i--) {
+                        const oldKey = `mrsOu_${prefix}_v${i}`;
+                        const oldData = localStorage.getItem(oldKey);
+                        if (oldData !== null) {
+                            const parsed = JSON.parse(oldData);
+                            console.log(`Migrated ${prefix} from v${i}`);
+                            localStorage.setItem(masterKey, JSON.stringify(parsed));
+                            return parsed;
+                        }
+                    }
+                }
+
+                // 3. 真的都沒有，才回傳預設值
+                return initialValue;
+            } catch (e) {
+                console.error("Load Error:", e);
+                return initialValue;
+            }
+        };
+
+        function MrsOuSmartFridge() {
+          const [activeTab, setActiveTab] = useState('planner'); 
+          
+          // --- State Management ---
+          const [fridgeItems, setFridgeItems] = useState(() => loadDataWithRescue(DB_KEYS.FRIDGE, INITIAL_FRIDGE));
+          const [recipes, setRecipes] = useState(() => loadDataWithRescue(DB_KEYS.RECIPES, INITIAL_RECIPES));
+          const [todayMenu, setTodayMenu] = useState(() => loadDataWithRescue(DB_KEYS.MENU, null));
+
+          // --- Data Persistence ---
+          useEffect(() => localStorage.setItem(DB_KEYS.FRIDGE, JSON.stringify(fridgeItems)), [fridgeItems]);
+          useEffect(() => localStorage.setItem(DB_KEYS.RECIPES, JSON.stringify(recipes)), [recipes]);
+          useEffect(() => localStorage.setItem(DB_KEYS.MENU, JSON.stringify(todayMenu)), [todayMenu]);
+
+          // --- Input States ---
+          const [newItemName, setNewItemName] = useState('');
+          const [newItemCategory, setNewItemCategory] = useState(CATEGORIES[0]);
+          const [newItemStorage, setNewItemStorage] = useState('冷藏');
+          const [newItemQty, setNewItemQty] = useState(1);
+          const [newItemExpiry, setNewItemExpiry] = useState(() => {
+              const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString().split('T')[0];
+          });
+          
+          const [showRecipeForm, setShowRecipeForm] = useState(false);
+          const [newRecipe, setNewRecipe] = useState({ name: '', ingredients: '', steps: '', type: '主菜' });
+          const [editingRecipeId, setEditingRecipeId] = useState(null);
+
+          // Planner States
+          const [showPlanConfigModal, setShowPlanConfigModal] = useState(false);
+          const [planMode, setPlanMode] = useState('dishes');
+          const [dishCount, setDishCount] = useState(3);
+          const [hasSoup, setHasSoup] = useState(true);
+          const [stapleType, setStapleType] = useState('白飯');
+          const [generatedCombos, setGeneratedCombos] = useState([]);
+          const [selectedComboId, setSelectedComboId] = useState(null);
+          const [planningMessage, setPlanningMessage] = useState('');
+
+          // Review & Adjust States
+          const [showReviewModal, setShowReviewModal] = useState(false);
+          const [reviewMenu, setReviewMenu] = useState([]);
+          const [showInventoryPicker, setShowInventoryPicker] = useState(false);
+          const [pickerTarget, setPickerTarget] = useState(null);
+          const [pickerCategoryFilter, setPickerCategoryFilter] = useState('全部');
+
+          // Deduction States
+          const [showDeductionConfig, setShowDeductionConfig] = useState(false);
+          const [deductionTarget, setDeductionTarget] = useState(null);
+          const [deductionError, setDeductionError] = useState(false);
+
+          // End Dinner States
+          const [showEndDinnerModal, setShowEndDinnerModal] = useState(false);
+          const [finishedDishesNames, setFinishedDishesNames] = useState([]);
+
+          // View States
+          const [activeCategoryTab, setActiveCategoryTab] = useState('全部');
+          const [activeRecipeTab, setActiveRecipeTab] = useState('全部');
+          
+          const [decreaseConfirm, setDecreaseConfirm] = useState({ show: false, item: null });
+          const [deleteConfirm, setDeleteConfirm] = useState({ show: false, type: null, id: null, name: '' });
+          const [viewingRecipe, setViewingRecipe] = useState(null);
+          const [toastMsg, setToastMsg] = useState(null);
+          
+          const recipeFormRef = useRef(null);
+
+          // --- Tab Reset Logic ---
+          useEffect(() => {
+              if (activeTab === 'fridge') setActiveCategoryTab('全部');
+              if (activeTab === 'recipes') setActiveRecipeTab('全部');
+          }, [activeTab]);
+
+          // --- Logic Helpers ---
+          const showToast = (msg) => { setToastMsg(msg); setTimeout(() => setToastMsg(null), 2500); };
+
+          const validFridgeItems = useMemo(() => {
+            return (fridgeItems || []).filter(item => item.quantity > 0).sort((a, b) => new Date(a.expiry) - new Date(b.expiry));
+          }, [fridgeItems]);
+
+          const getDaysUntilExpiry = (dateString) => {
+            const today = new Date(); today.setHours(0,0,0,0);
+            const target = new Date(dateString);
+            const diffTime = target - today;
+            return Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+          };
+
+          const guessCategory = (name) => {
+              if (!name) return null;
+              const n = name.toLowerCase();
+              if (n.includes('雞') || n.includes('豬') || n.includes('牛') || n.includes('魚') || n.includes('蝦') || n.includes('肉') || n.includes('蛤蜊') || n.includes('絞肉') || n.includes('鯖魚')) return '肉品海鮮';
+              if (n.includes('菜') || n.includes('瓜') || n.includes('菇') || n.includes('筍') || n.includes('椒') || n.includes('茄') || n.includes('蔥') || n.includes('薑') || n.includes('蒜') || n.includes('馬鈴薯') || n.includes('洋蔥') || n.includes('花椰菜') || n.includes('紅蘿蔔') || n.includes('玉蜀黍')) return '蔬菜';
+              if (n.includes('蛋') || n.includes('奶') || n.includes('豆腐')) return '蛋、奶、乳製品';
+              if (n.includes('醬') || n.includes('油') || n.includes('醋') || n.includes('粉') || n.includes('糖') || n.includes('鹽') || n.includes('味噌') || n.includes('咖喱')) return '油調味';
+              if (n.includes('麵') || n.includes('米') || n.includes('飯') || n.includes('冬粉')) return '米、麵';
+              return null;
+          };
+
+          const checkIngredientMatch = (recipeIng, fridgeIngName) => {
+              const rName = recipeIng.toLowerCase();
+              const fName = fridgeIngName.toLowerCase();
+              if (rName === fName) return true;
+              if (fName.includes(rName)) return true;
+              if (rName.includes(fName)) return true;
+              if (rName.length >= 2 && fName.length >= 2) {
+                  const allCharsPresent = rName.split('').every(char => fName.includes(char));
+                  if (allCharsPresent) return true;
+              }
+              return false;
+          };
+
+          const calculateRecipeMatch = useCallback((recipe, replacements = {}) => {
+            if (!recipe) return { missing: [], present: [], matchRate: 0 };
+            
+            const effectiveIngredients = (recipe.ingredients || [])
+                .filter(ing => replacements[ing] !== 'SKIP')
+                .map(ing => replacements[ing] || ing);
+            
+            const missing = [];
+            const present = [];
+
+            effectiveIngredients.forEach(ing => {
+                const hasMatch = validFridgeItems.some(fItem => checkIngredientMatch(ing, fItem.name));
+                if (hasMatch) {
+                    present.push(ing);
+                } else {
+                    missing.push(ing);
+                }
+            });
+
+            const matchRate = effectiveIngredients.length > 0 
+                ? (effectiveIngredients.length - missing.length) / effectiveIngredients.length 
+                : 1; 
+            return { ...recipe, missing, present, matchRate, effectiveIngredients };
+          }, [validFridgeItems]);
+
+          // --- Actions ---
+
+          const saveRecipe = (e) => {
+            e.preventDefault();
+            if (!newRecipe.name.trim()) return;
+            const ingArray = newRecipe.ingredients.split(/[,，、]/).map(i => i.trim()).filter(i => i);
+            const recipeData = { ...newRecipe, ingredients: ingArray };
+            
+            let newRecipesList;
+            if (editingRecipeId) {
+              newRecipesList = recipes.map(r => r.id === editingRecipeId ? { ...recipeData, id: editingRecipeId } : r);
+              showToast(`已更新食譜：${newRecipe.name}`);
+              setEditingRecipeId(null);
+            } else {
+              newRecipesList = [{ ...recipeData, id: Date.now().toString() }, ...recipes];
+              showToast(`已新增食譜：${newRecipe.name}`);
+            }
+            setRecipes(newRecipesList);
+            setNewRecipe({ name: '', ingredients: '', steps: '', type: '主菜' });
+            setShowRecipeForm(false);
+          };
+
+          const startEditRecipe = (recipe) => {
+              setEditingRecipeId(recipe.id);
+              setNewRecipe({ 
+                  name: recipe.name, 
+                  ingredients: recipe.ingredients.join(', '), 
+                  steps: recipe.steps || '', 
+                  type: recipe.type 
+              });
+              setShowRecipeForm(true);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              setTimeout(() => {
+                  if (recipeFormRef.current) {
+                      recipeFormRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
+              }, 100);
+          };
+
+          const addFridgeItem = (e) => {
+              e.preventDefault();
+              if(!newItemName.trim()) return;
+              const name = newItemName.trim();
+              const newItems = [...fridgeItems, { 
+                  id: Date.now().toString(), 
+                  name: name, 
+                  category: newItemCategory, 
+                  quantity: parseInt(newItemQty)||1, 
+                  expiry: newItemExpiry,
+                  storage: newItemStorage 
+              }];
+              setFridgeItems(newItems);
+              setNewItemName('');
+              showToast(`已新增食材：${name} (${newItemStorage})`);
+          };
+
+          const confirmDecrease = () => {
+              const item = decreaseConfirm.item;
+              const newQty = item.quantity - 1;
+              let newFridge = [...fridgeItems];
+              if (newQty <= 0) {
+                  newFridge = newFridge.filter(i => i.id !== item.id);
+              } else {
+                  const idx = newFridge.findIndex(i => i.id === item.id);
+                  if (idx !== -1) newFridge[idx] = { ...item, quantity: newQty };
+              }
+              setFridgeItems(newFridge);
+              setDecreaseConfirm({ show: false, item: null });
+              showToast(`${item.name} 數量減少 1`);
+          };
+
+          const confirmDelete = () => {
+              if (deleteConfirm.type === 'recipe') {
+                  const newRecipes = recipes.filter(r => r.id !== deleteConfirm.id);
+                  setRecipes(newRecipes);
+              } else if (deleteConfirm.type === 'fridge') {
+                  const newFridge = fridgeItems.filter(i => i.id !== deleteConfirm.id);
+                  setFridgeItems(newFridge);
+              }
+              setDeleteConfirm({ show: false, type: null, id: null, name: '' });
+              showToast('已刪除資料');
+          };
+
+          // --- Manual Rescue Action ---
+          const handleManualRescue = (type) => {
+              if(type === 'recipes') {
+                  if(window.confirm('確定要匯入完整預設食譜嗎？這會覆蓋目前的食譜列表。')) {
+                      setRecipes(INITIAL_RECIPES);
+                      showToast('已匯入完整食譜！');
+                  }
+              } else {
+                  if(window.confirm('確定要重置為預設冰箱庫存嗎？')) {
+                      setFridgeItems(INITIAL_FRIDGE);
+                      showToast('已重置庫存！');
+                  }
+              }
+          };
+
+          // --- Logic ---
+          const generateMenuCombinations = () => {const slots=[];if(planMode==='onePot'){slots.push('一鍋到底');}else{slots.push('主菜');for(let i=1;i<dishCount;i++)slots.push(i===1&&dishCount>=3?'主菜':'配菜');if(hasSoup)slots.push('湯品');if(stapleType!=='不需主食')slots.push('主食');}const validRecipesByType={};let errorMsg='';RECIPE_TYPES.forEach(type=>{let allCandidates=recipes.filter(r=>r.type===type);if(type==='主食'&&planMode!=='onePot')allCandidates=allCandidates.filter(r=>r.name===stapleType);if(allCandidates.length===0){if(slots.includes(type))errorMsg+=`⚠️ 找不到【${type}】類型的食譜。\n`;validRecipesByType[type]=[];return;}let candidates=allCandidates.map(r=>calculateRecipeMatch(r)).filter(r=>r.matchRate>0);if(candidates.length===0&&slots.includes(type)){errorMsg+=`⚠️【${type}】類型食譜因食材不足無法組成。\n`;}validRecipesByType[type]=candidates;});if(errorMsg){setPlanningMessage(errorMsg);setGeneratedCombos([]);setShowPlanConfigModal(false);return;}const combos=[];for(let c=0;c<3;c++){const currentMenu=[];const usedIds=new Set();let isValid=true;for(const slotType of slots){const candidates=validRecipesByType[slotType]||[];const available=candidates.filter(r=>!usedIds.has(r.id));if(available.length===0){isValid=false;break;}const picked=available.sort((a,b)=>b.matchRate-a.matchRate)[Math.floor(Math.random()*Math.min(available.length,2+c))];currentMenu.push({slot:slotType,recipeId:picked.id});usedIds.add(picked.id);}if(isValid){if(!combos.some(combo=>combo.items.map(i=>i.recipeId).join()===currentMenu.map(i=>i.recipeId).join())){combos.push({id:Date.now()+c,name:`維尼推薦 ${String.fromCharCode(65+c)} 餐`,items:currentMenu});}}}setGeneratedCombos(combos);setPlanningMessage(combos.length===0?'無法組成完整套餐，請檢查食譜或食材。':'');setShowPlanConfigModal(false);};
+          const startReview = () => { const combo = generatedCombos.find(c => c.id === selectedComboId); if (!combo) return; setReviewMenu(combo.items.map(i => ({ ...i, replacements: {}, isSkipped: false }))); setShowReviewModal(true); };
+          const openInventoryPicker = (menuIndex, missingIng) => { const detectedCategory = guessCategory(missingIng); const initialFilter = detectedCategory || '全部'; setPickerCategoryFilter(initialFilter); setPickerTarget({ menuIndex, missingIng, categoryHint: detectedCategory }); setShowInventoryPicker(true); };
+          const handleReplacementSelect = (val) => { const { menuIndex, missingIng } = pickerTarget; const newMenu = [...reviewMenu]; newMenu[menuIndex].replacements = { ...newMenu[menuIndex].replacements, [missingIng]: val === 'SKIP' ? 'SKIP' : val.name }; setReviewMenu(newMenu); setShowInventoryPicker(false); };
+          const toggleDishSkip = (index) => { const newMenu = [...reviewMenu]; newMenu[index].isSkipped = !newMenu[index].isSkipped; setReviewMenu(newMenu); };
+          const confirmToCooking = () => { const cookingMenu = reviewMenu.map(item => { if (item.isSkipped || !item.recipeId) return null; const recipe = recipes.find(r => r.id === item.recipeId); return { slot: item.slot, recipe, replacements: item.replacements, status: 'pending', deductionPlan: [] }; }).filter(Boolean); setTodayMenu(cookingMenu); setGeneratedCombos([]); setSelectedComboId(null); setShowReviewModal(false); setActiveTab('today'); };
+          const handleDishCheck = (index) => {const dish = todayMenu[index]; if (dish.status === 'ready') { const newMenu = [...todayMenu]; newMenu[index].status = 'pending'; newMenu[index].deductionPlan = []; setTodayMenu(newMenu); return; } const effectiveIngredients = dish.recipe.ingredients.filter(ing => dish.replacements[ing] !== 'SKIP').map(ing => dish.replacements[ing] || ing); const plan = []; effectiveIngredients.forEach(ingName => { const match = validFridgeItems.find(i => checkIngredientMatch(ingName, i.name)); if (match) { const isUncountable = match.category === '米、麵'; plan.push({ fridgeId: match.id, name: match.name, currentQty: match.quantity, deductQty: isUncountable ? 0 : 1, isUncountable }); } }); setDeductionTarget({ index, recipeName: dish.recipe.name, items: plan }); setDeductionError(false); setShowDeductionConfig(true); };
+          const confirmDeductionConfig = () => { if (deductionError) return; const newMenu = [...todayMenu]; newMenu[deductionTarget.index].deductionPlan = deductionTarget.items; newMenu[deductionTarget.index].status = 'ready'; setTodayMenu(newMenu); setShowDeductionConfig(false); };
+          const handleEndDinner = () => { const readyDishes = todayMenu.filter(d => d.status === 'ready'); if (readyDishes.length === 0) { if (!window.confirm("目前沒有任何一道菜標記為「已完成」。\n確定要結束而不扣除食材嗎？")) return; } const finishedNames = readyDishes.map(d => d.recipe.name); setFinishedDishesNames(finishedNames); let currentFridge = [...fridgeItems]; readyDishes.forEach(dish => { dish.deductionPlan.forEach(planItem => { if (planItem.deductQty > 0) { const targetIndex = currentFridge.findIndex(i => i.id === planItem.fridgeId); if (targetIndex !== -1) { currentFridge[targetIndex] = { ...currentFridge[targetIndex], quantity: Math.max(0, currentFridge[targetIndex].quantity - planItem.deductQty) }; } } }); }); const updatedFridge = currentFridge.filter(i => i.quantity > 0); setFridgeItems(updatedFridge); setShowEndDinnerModal(true); };
+          const closeEndDinner = () => { setShowEndDinnerModal(false); setTodayMenu(null); setActiveTab('planner'); };
+          const promptDecrease = (item) => { setDecreaseConfirm({ show: true, item }); };
+          const promptDelete = (type, id, name) => { setDeleteConfirm({ show: true, type, id, name }); };
+
+          // --- UI Components ---
+          const TabButton = ({ id, icon: Icon, label }) => (
+            <button onClick={() => setActiveTab(id)} className={`flex flex-col items-center justify-center w-full py-3 ${activeTab === id ? 'text-[#8B4513] bg-[#EFE0D1] border-t-2 border-[#93C572]' : 'text-stone-400'}`}>
+              <Icon size={24} className="mb-1" /><span className="text-[10px] font-bold">{label}</span>
+            </button>
+          );
+
+          return (
+            <div className="min-h-screen bg-[#FDF5E6] flex flex-col font-sans text-stone-700 pb-20">
+              
+              {toastMsg && <div className="fixed top-4 left-0 right-0 z-[100] flex justify-center animate-bounce pointer-events-none"><div className="bg-[#8B4513] text-white px-6 py-3 rounded-full shadow-lg flex items-center gap-2 font-bold opacity-95"><Check size={20} /> {toastMsg}</div></div>}
+
+              <header className="bg-gradient-to-r from-[#D2B48C] to-[#C4A484] text-stone-800 p-4 shadow-md sticky top-0 z-20 flex justify-between items-center rounded-b-2xl">
+                <div className="flex items-center gap-2"><Smile size={28} className="text-white drop-shadow-md" /><h1 className="text-xl font-bold text-white tracking-wide">我的智能冰箱</h1></div>
+                <div className="text-xs bg-[#8B4513] text-white px-3 py-1 rounded-full flex items-center gap-1 shadow-sm"><Refrigerator size={12} /> {validFridgeItems.length}</div>
+              </header>
+
+              <main className="flex-1 max-w-md w-full mx-auto p-4 relative">
+                {/* Today's Menu */}
+                {activeTab === 'today' && (
+                  <div className="animate-fade-in space-y-5">
+                    {!todayMenu ? (
+                      <div className="text-center py-10 bg-white rounded-3xl border-2 border-dashed border-[#D2B48C] opacity-70">
+                        <Coffee size={64} className="mx-auto text-[#93C572] mb-3" />
+                        <p className="text-[#8B4513] font-bold mb-4">今天還沒有安排菜單喔！</p>
+                        <button onClick={() => setActiveTab('planner')} className="bg-[#93C572] text-white px-6 py-2 rounded-full font-bold shadow-md hover:bg-[#7FB060]">去規劃晚餐</button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="bg-white p-4 rounded-2xl shadow-sm border border-stone-200 flex justify-between items-center">
+                          <div><h2 className="text-lg font-bold text-[#8B4513]">正在烹飪...</h2><p className="text-xs text-stone-500">點擊圓圈設定實際用量</p></div>
+                          <button onClick={handleEndDinner} className="text-sm bg-[#93C572] text-white px-4 py-2 rounded-xl hover:bg-[#7FB060] font-bold shadow-sm flex items-center gap-1"><CheckCircle2 size={16}/> 結束用餐</button>
+                        </div>
+                        <div className="space-y-3">
+                          {todayMenu.map((item, index) => (
+                            <div key={index} className={`bg-white rounded-2xl shadow-sm border-2 transition-all ${item.status === 'ready' ? 'border-[#93C572] bg-emerald-50' : 'border-stone-100'}`}>
+                              <div className="p-4 flex items-center gap-4">
+                                <button onClick={() => handleDishCheck(index)} className={`w-10 h-10 shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${item.status === 'ready' ? 'bg-[#93C572] border-[#93C572] text-white' : 'border-stone-300 text-stone-300'}`}><Check size={20} strokeWidth={4} /></button>
+                                <div className="flex-1">
+                                  <div className="flex justify-between"><span className="text-xs font-bold text-[#C4A484]">{item.slot}</span><button onClick={() => setViewingRecipe(item.recipe)} className="text-xs underline text-[#8B4513]">做法</button></div>
+                                  <h3 className={`font-bold text-lg ${item.status === 'ready' ? 'text-stone-500 line-through' : 'text-stone-800'}`}>{item.recipe.name}</h3>
+                                  {item.deductionPlan.length > 0 && <div className="text-[10px] text-stone-500 mt-1">消耗: {item.deductionPlan.filter(d=>d.deductQty>0).map(d=>`${d.name}x${d.deductQty}`).join(', ') || '無'}</div>}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Planner */}
+                {activeTab === 'planner' && (
+                  <div className="animate-fade-in space-y-5">
+                    {todayMenu ? (
+                        <div className="bg-white p-8 rounded-3xl shadow-sm border border-stone-200 text-center flex flex-col items-center">
+                            <Lock size={48} className="text-[#8B4513] mb-4 opacity-30" />
+                            <h2 className="text-xl font-bold text-[#8B4513] mb-2">晚餐進行中</h2>
+                            <p className="text-sm text-stone-500 mb-6">請先結束目前的晚餐，才能規劃新的！</p>
+                            <button onClick={() => setActiveTab('today')} className="bg-[#93C572] text-white px-8 py-3 rounded-2xl font-bold shadow-md hover:bg-[#7FB060]">前往今日菜單</button>
+                        </div>
+                    ) : (
+                        <>
+                        <div className="bg-white p-6 rounded-3xl shadow-sm border border-stone-200 text-center">
+                            <ClipboardList size={48} className="mx-auto text-[#D2B48C] mb-2" />
+                            <h2 className="text-xl font-bold text-[#8B4513] mb-2">{generatedCombos.length ? '維尼幫你選好了' : planningMessage || '今晚想吃什麼？'}</h2>
+                            {!generatedCombos.length && <p className="text-xs text-stone-500 mb-4 whitespace-pre-line">{planningMessage}</p>}
+                            <button onClick={() => {setShowPlanConfigModal(true); setPlanningMessage(''); setGeneratedCombos([]);}} className="w-full bg-[#93C572] text-white py-3 rounded-2xl font-bold text-lg shadow-md hover:bg-[#7FB060] transition flex items-center justify-center gap-2">
+                                {generatedCombos.length ? <RefreshCw size={20}/> : <Coffee size={20}/>} {generatedCombos.length || planningMessage ? '重新規劃' : '開始規劃晚餐'}
+                            </button>
+                        </div>
+                        {generatedCombos.length > 0 && (
+                            <div className="space-y-4">
+                                <div className="flex flex-col gap-4">
+                                    {generatedCombos.map((combo) => (
+                                        <div key={combo.id} onClick={() => setSelectedComboId(combo.id)} className={`relative border-2 rounded-2xl p-4 cursor-pointer transition-all ${selectedComboId === combo.id ? 'border-[#93C572] bg-white ring-2 ring-[#93C572] shadow-lg scale-[1.02]' : 'border-stone-200 bg-white/50'}`}>
+                                            <div className="flex justify-between items-center mb-3 border-b border-stone-100 pb-2">
+                                                <h3 className={`font-bold ${selectedComboId === combo.id ? 'text-[#93C572]' : 'text-stone-600'}`}>{combo.name}</h3>
+                                                {selectedComboId === combo.id && <div className="bg-[#93C572] text-white text-xs px-2 py-1 rounded-full"><Check size={12}/></div>}
+                                            </div>
+                                            <div className="space-y-2">
+                                                {combo.items.map((item, idx) => {
+                                                    const recipe = recipes.find(r => r.id === item.recipeId);
+                                                    const { missing, present } = calculateRecipeMatch(recipe);
+                                                    return (
+                                                        <div key={idx} className="flex justify-between items-start text-sm pl-2 border-l-2 border-[#EFE0D1] py-1">
+                                                            <span className="text-stone-700 font-medium">{recipe.name}</span>
+                                                            <div className="flex flex-wrap justify-end gap-1 max-w-[60%]">
+                                                                {present.length > 0 && present.slice(0,3).map(ing => <span key={ing} className="text-[9px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded border border-emerald-100 flex items-center gap-1"><Check size={8}/> {ing}</span>)}
+                                                                {missing.length > 0 && <span className="text-[9px] bg-red-50 text-red-500 px-1 rounded flex items-center"><AlertCircle size={8}/>缺{missing.length}</span>}
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="sticky bottom-16 bg-[#FDF5E6]/90 backdrop-blur-sm pt-2 pb-2">
+                                    <button disabled={selectedComboId === null} onClick={startReview} className={`w-full py-3 rounded-2xl font-bold text-lg flex justify-center items-center gap-2 shadow-lg transition-all ${selectedComboId !== null ? 'bg-[#8B4513] text-white animate-pulse-slow' : 'bg-stone-300 text-stone-500 cursor-not-allowed'}`}>
+                                        <UtensilsCrossed size={20} /> {selectedComboId !== null ? '檢視食材與確認' : '請先選擇上方組合'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        </>
+                    )}
+                  </div>
+                )}
+
+                {/* Fridge */}
+                {activeTab === 'fridge' && (
+                  <div className="animate-fade-in space-y-5">
+                    <div className="bg-white p-5 rounded-3xl shadow-sm border border-stone-200">
+                      <h3 className="text-sm font-bold text-[#8B4513] mb-3 flex items-center gap-2"><Plus size={16}/> 進貨登錄</h3>
+                      <form onSubmit={addFridgeItem} className="space-y-3">
+                        <div className="grid grid-cols-[1.5fr_1fr] gap-2">
+                          <input type="text" placeholder="食材名稱" className="w-full p-2 border border-stone-300 rounded-lg bg-[#FFFAF0] min-w-0" value={newItemName} onChange={(e) => setNewItemName(e.target.value)} />
+                          <select className="w-full p-2 border border-stone-300 rounded-lg bg-white text-sm min-w-0" value={newItemCategory} onChange={(e) => setNewItemCategory(e.target.value)}>{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select>
+                        </div>
+                        <div className="flex gap-2 items-center">
+                            <select className="p-2 border border-stone-300 rounded-lg bg-white text-sm" value={newItemStorage} onChange={(e) => setNewItemStorage(e.target.value)}>{STORAGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>
+                            <input type="number" min="1" className="w-16 p-2 border border-stone-300 rounded-lg bg-white text-center" value={newItemQty} onChange={(e) => setNewItemQty(e.target.value)} />
+                            <input type="date" className="flex-1 p-2 border border-stone-300 rounded-lg bg-white text-sm min-w-0" value={newItemExpiry} onChange={(e) => setNewItemExpiry(e.target.value)} />
+                        </div>
+                        <button type="submit" className="w-full bg-[#93C572] text-white py-2 rounded-lg font-bold hover:bg-[#7FB060]">放入冰箱</button>
+                      </form>
+                    </div>
+
+                    {/* Inventory Tabs */}
+                    <div className="flex gap-2 overflow-x-auto pb-2 mb-1 no-scrollbar sticky top-16 z-10 bg-[#FDF5E6] pt-2">
+                        <button onClick={() => setActiveCategoryTab('全部')} className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold shadow-sm transition ${activeCategoryTab === '全部' ? 'bg-[#8B4513] text-white' : 'bg-white text-stone-400 border'}`}>全部</button>
+                        {CATEGORIES.map(c => (<button key={c} onClick={() => setActiveCategoryTab(c)} className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold shadow-sm transition ${activeCategoryTab === c ? 'bg-[#8B4513] text-white' : 'bg-white text-stone-400 border'}`}>{c}</button>))}
+                    </div>
+
+                    <div className="space-y-3">
+                        {CATEGORIES.filter(c => activeCategoryTab === '全部' || c === activeCategoryTab).map(cat => {
+                            const items = fridgeItems.filter(i => i.category === cat);
+                            if(!items.length) return null;
+                            const sortedItems = items.sort((a,b) => new Date(a.expiry) - new Date(b.expiry));
+                            return (
+                                <div key={cat}><h4 className="text-xs font-bold text-stone-500 mb-1 ml-2">{cat}</h4>
+                                {sortedItems.map(item => {
+                                    const days = getDaysUntilExpiry(item.expiry);
+                                    const isWarning = days <= 5 && days >= 0;
+                                    const isExpired = days < 0;
+                                    return (
+                                        <div key={item.id} className={`p-3 mb-2 rounded-2xl border flex justify-between items-center bg-white ${isWarning ? 'border-red-300 bg-red-50' : isExpired ? 'opacity-60 border-stone-200' : 'border-stone-100'}`}>
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold text-stone-700 text-lg">{item.name}</span> 
+                                                    {item.storage === '冷凍' ? <Snowflake size={14} className="text-blue-400"/> : item.storage === '冷藏' ? <ThermometerSnowflake size={14} className="text-cyan-500"/> : null}
+                                                    <span className="bg-[#EFE0D1] text-[#8B4513] text-xs px-2 py-0.5 rounded-full font-bold">x{item.quantity}</span>
+                                                    {isWarning && <span className="text-[10px] text-red-500 font-bold flex items-center gap-0.5"><AlertCircle size={10}/> 快過期</span>}
+                                                    {isExpired && <span className="text-[10px] text-stone-400 font-bold">已過期</span>}
+                                                </div>
+                                                <div className="text-[10px] text-stone-400 mt-1 flex items-center gap-1"><CalendarClock size={10}/> {item.expiry} ({days<0?'過期':`剩${days}天`})</div>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <button onClick={() => promptDecrease(item)} className="text-stone-300 hover:text-[#93C572] p-1"><MinusCircle size={20}/></button>
+                                                <button onClick={() => promptDelete('fridge', item.id, item.name)} className="text-stone-300 hover:text-red-500 p-1"><Trash2 size={20}/></button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}</div>
+                            )
+                        })}
+                    </div>
+                     <div className="text-center pt-8 pb-4"><button onClick={() => handleManualRescue('fridge')} className="text-xs text-[#8B4513] bg-[#EFE0D1] px-4 py-2 rounded-full flex items-center gap-1 mx-auto hover:bg-[#D2B48C] hover:text-white transition"><Download size={14}/> 重置庫存</button></div>
+                  </div>
+                )}
+
+                {/* Recipes */}
+                {activeTab === 'recipes' && (
+                  <div className="animate-fade-in space-y-4">
+                     <div className="flex justify-between items-center mb-2"><h2 className="text-lg font-bold text-[#8B4513]">我的私房菜</h2><button onClick={() => {setShowRecipeForm(!showRecipeForm); setEditingRecipeId(null); setNewRecipe({name:'',ingredients:'',steps:'',type:'主菜'})}} className="bg-[#93C572] text-white px-4 py-2 rounded-xl text-sm flex items-center gap-1 shadow-md hover:bg-[#7FB060]"><Plus size={16}/> 新增</button></div>
+                     <div className="flex gap-2 overflow-x-auto pb-2 mb-2 no-scrollbar">
+                        <button onClick={() => setActiveRecipeTab('全部')} className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold shadow-sm transition ${activeRecipeTab === '全部' ? 'bg-[#93C572] text-white' : 'bg-white text-stone-400 border'}`}>全部</button>
+                        {RECIPE_TYPES.map(t => (<button key={t} onClick={() => setActiveRecipeTab(t)} className={`whitespace-nowrap px-4 py-2 rounded-full text-sm font-bold shadow-sm transition ${activeRecipeTab === t ? 'bg-[#93C572] text-white' : 'bg-white text-stone-400 border'}`}>{t}</button>))}
+                     </div>
+                    {showRecipeForm && (<div ref={recipeFormRef} className="bg-white p-4 rounded-2xl shadow-lg border border-[#D2B48C] mb-4"><form onSubmit={saveRecipe} className="space-y-3"><input className="w-full p-2 border rounded-lg" placeholder="菜名" value={newRecipe.name} onChange={e=>setNewRecipe({...newRecipe, name:e.target.value})}/><input className="w-full p-2 border rounded-lg" placeholder="食材 (用逗號隔開)" value={newRecipe.ingredients} onChange={e=>setNewRecipe({...newRecipe, ingredients:e.target.value})}/><select className="w-full p-2 border rounded-lg" value={newRecipe.type} onChange={e=>setNewRecipe({...newRecipe, type:e.target.value})}>{RECIPE_TYPES.map(t=><option key={t}>{t}</option>)}</select><textarea className="w-full p-2 border rounded-lg h-24 text-sm" placeholder="做法步驟..." value={newRecipe.steps} onChange={e=>setNewRecipe({...newRecipe, steps:e.target.value})}/><button className="w-full bg-[#8B4513] text-white py-2 rounded-lg font-bold">儲存</button></form></div>)}
+                    <div className="grid grid-cols-1 gap-3">
+                        {recipes.filter(r => activeRecipeTab === '全部' || r.type === activeRecipeTab).map(recipe => (
+                            <div key={recipe.id} onClick={() => setViewingRecipe(recipe)} className="bg-white p-4 rounded-2xl shadow-sm border border-stone-100 relative pr-10 cursor-pointer hover:border-[#D2B48C] transition-colors">
+                                <h3 className="font-bold text-stone-700">{recipe.name}</h3><span className="text-xs bg-[#F5DEB3] text-[#8B4513] px-2 py-0.5 rounded-full">{recipe.type}</span>
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                    {recipe.ingredients.map((ing, i) => (<span key={i} className="text-[10px] bg-stone-50 text-stone-500 px-1.5 py-0.5 rounded border border-stone-200">{ing}</span>))}
+                                </div>
+                                <div className="absolute bottom-3 right-3 flex gap-2"><button onClick={(e) => {e.stopPropagation(); startEditRecipe(recipe);}}><Pencil size={16} className="text-stone-300 hover:text-[#93C572]"/></button><button onClick={(e) => {e.stopPropagation(); promptDelete('recipe', recipe.id, recipe.name);}}><Trash2 size={16} className="text-stone-300 hover:text-red-500"/></button></div>
+                            </div>
+                        ))}
+                    </div>
+                     <div className="text-center pt-8 pb-4"><button onClick={() => handleManualRescue('recipes')} className="text-xs text-[#8B4513] bg-[#EFE0D1] px-4 py-2 rounded-full flex items-center gap-1 mx-auto hover:bg-[#D2B48C] hover:text-white transition"><Download size={14}/> 重置/匯入 食譜</button></div>
+                  </div>
+                )}
+              </main>
+
+              {/* --- MODALS --- */}
+              {deleteConfirm.show && <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4"><div className="bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl text-center"><AlertOctagon size={48} className="text-red-500 mx-auto mb-4" /><h3 className="text-lg font-bold text-stone-800 mb-2">確定要刪除嗎？</h3><p className="text-stone-500 mb-6">您即將刪除「{deleteConfirm.name}」。</p><div className="flex gap-3"><button onClick={() => setDeleteConfirm({show:false})} className="flex-1 py-2 bg-stone-100 text-stone-500 rounded-xl">取消</button><button onClick={confirmDelete} className="flex-1 py-2 bg-red-500 text-white rounded-xl font-bold">刪除</button></div></div></div>}
+              {decreaseConfirm.show && <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4"><div className="bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl text-center"><MinusCircle size={48} className="text-[#93C572] mx-auto mb-4" /><h3 className="text-lg font-bold text-stone-800 mb-2">減少庫存</h3><p className="text-stone-500 mb-6">確定要將「{decreaseConfirm.item?.name}」數量減 1 嗎？</p><div className="flex gap-3"><button onClick={() => setDecreaseConfirm({show:false})} className="flex-1 py-2 bg-stone-100 text-stone-500 rounded-xl">取消</button><button onClick={confirmDecrease} className="flex-1 py-2 bg-[#93C572] text-white rounded-xl font-bold">確認減少</button></div></div></div>}
+              {showReviewModal && <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-4 backdrop-blur-sm"><div className="bg-white w-full max-w-md rounded-3xl p-5 shadow-2xl max-h-[85vh] overflow-y-auto"><h3 className="text-lg font-bold text-[#8B4513] mb-4 text-center">檢視與調整</h3><div className="space-y-4 mb-6">{reviewMenu.map((item, index) => {if (!item.recipeId) return <div key={index} className="flex justify-between items-center p-3 bg-stone-100 rounded-2xl border border-dashed border-stone-300"><div className="text-stone-400 text-sm"><span className="line-through">原本料理</span> 不煮了</div><button onClick={() => {const newMenu=[...reviewMenu]; newMenu[index].isSkipped=!newMenu[index].isSkipped; setReviewMenu(newMenu);}} className="text-[#8B4513] text-xs font-bold bg-[#EFE0D1] px-2 py-1 rounded flex items-center gap-1"><Undo2 size={14}/> 復原</button></div>; const recipe = recipes.find(r => r.id === item.recipeId); const { missing, present } = calculateRecipeMatch(recipe, item.replacements); return (<div key={index} className="bg-white p-3 rounded-2xl border border-stone-200 shadow-sm"><div className="flex justify-between items-start"><div><div className="text-xs text-stone-400">{item.slot}</div><div className="font-bold text-stone-800">{recipe.name}</div></div><button onClick={() => {const newMenu=[...reviewMenu]; newMenu[index].isSkipped=true; setReviewMenu(newMenu);}} className="text-stone-400 hover:text-red-500"><Ban size={16}/></button></div><div className="mt-2 space-y-1"><div className="flex flex-wrap gap-1 mb-1">{present.map(ing=><span key={ing} className="text-[10px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded border border-emerald-100 flex items-center gap-1"><Check size={8}/> {ing}</span>)}</div>{missing.length > 0 ? missing.map(ing => (<div key={ing} className="flex justify-between items-center text-xs bg-red-50 p-1.5 rounded-lg text-red-700"><span className="font-bold flex items-center gap-1"><AlertCircle size={10}/> 缺: {ing}</span><button onClick={() => {const detectedCategory = guessCategory(ing); setPickerCategoryFilter(detectedCategory||'全部'); setPickerTarget({ menuIndex:index, missingIng:ing, categoryHint: detectedCategory }); setShowInventoryPicker(true);}} className="bg-white border border-red-200 px-2 py-0.5 rounded shadow-sm hover:bg-red-100">替換</button></div>)) : <div className="text-xs text-[#93C572] font-bold flex items-center gap-1"><Check size={12}/> 食材齊全</div>}{Object.entries(item.replacements).map(([old, val]) => (<div key={old} className="flex justify-between items-center text-xs text-[#8B4513] bg-[#EFE0D1] p-1.5 rounded-lg"><div className="flex items-center gap-1">{val === 'SKIP' ? <span className="text-stone-500">缺 {old} (本次略過)</span> : <span><ArrowRightLeft size={10} className="inline"/> 用 <b>{val}</b> 代替 {old}</span>}</div><button onClick={() => {const detectedCategory = guessCategory(old); setPickerCategoryFilter(detectedCategory||'全部'); setPickerTarget({ menuIndex:index, missingIng:old, categoryHint: detectedCategory }); setShowInventoryPicker(true);}} className="underline opacity-60 hover:opacity-100">修改</button></div>))}</div></div>)})}</div><div className="flex gap-3"><button onClick={() => setShowReviewModal(false)} className="flex-1 py-3 text-stone-400 font-bold bg-stone-100 rounded-2xl">返回</button><button onClick={confirmToCooking} className="flex-[2] py-3 bg-[#8B4513] text-white font-bold rounded-2xl shadow-md">確認，準備開飯！</button></div></div></div>}
+              {showInventoryPicker && <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4"><div className="bg-white w-full max-w-sm rounded-3xl p-4 shadow-2xl max-h-[70vh] overflow-y-auto"><h3 className="font-bold text-[#8B4513] mb-1">替換：{pickerTarget.missingIng}</h3><div className="flex gap-2 overflow-x-auto pb-2 mb-2 no-scrollbar"><button onClick={() => setPickerCategoryFilter('全部')} className={`whitespace-nowrap px-3 py-1 rounded-full text-xs font-bold ${pickerCategoryFilter === '全部' ? 'bg-[#93C572] text-white' : 'bg-stone-100 text-stone-400'}`}>全部</button>{CATEGORIES.map(c => (<button key={c} onClick={() => setPickerCategoryFilter(c)} className={`whitespace-nowrap px-3 py-1 rounded-full text-xs font-bold ${pickerCategoryFilter === c ? 'bg-[#93C572] text-white' : 'bg-stone-100 text-stone-400'}`}>{c}</button>))}</div><button onClick={() => handleReplacementSelect('SKIP')} className="w-full mb-3 py-3 border-2 border-dashed border-stone-300 text-stone-500 rounded-xl font-bold hover:bg-stone-50 flex justify-center items-center gap-2"><Ban size={16}/> 略過不使用</button><div className="space-y-3">{CATEGORIES.filter(c => pickerCategoryFilter === '全部' || c === pickerCategoryFilter).map(cat => {const items = validFridgeItems.filter(i => i.category === cat); if(!items.length) return null; return (<div key={cat}><div className="text-xs font-bold text-stone-400 mb-1">{cat}</div><div className="grid grid-cols-2 gap-2">{items.map(item => (<button key={item.id} onClick={() => handleReplacementSelect(item)} className="p-2 border rounded-lg hover:bg-[#FAF0E6] hover:border-[#8B4513] text-left text-sm font-bold flex justify-between"><span>{item.name}</span><span className="text-xs text-stone-400 font-normal">x{item.quantity}</span></button>))}</div></div>)})}</div><button onClick={() => setShowInventoryPicker(false)} className="w-full mt-4 py-2 bg-stone-100 text-stone-500 rounded-xl">取消</button></div></div>}
+              {showDeductionConfig && deductionTarget && <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 backdrop-blur-sm"><div className="bg-white w-full max-w-sm rounded-3xl p-5 shadow-2xl"><h3 className="font-bold text-[#8B4513] mb-1">完成料理：{deductionTarget.recipeName}</h3><p className="text-xs text-stone-500 mb-4">設定實際消耗數量</p><div className="space-y-2 mb-4 max-h-[40vh] overflow-y-auto">{deductionTarget.items.length === 0 ? <div className="text-center text-stone-400 py-4 text-xs">無對應庫存需扣除</div> : deductionTarget.items.map((item, idx) => (<div key={idx} className={`flex justify-between items-center bg-stone-50 p-2 rounded-xl ${item.deductQty > item.currentQty ? 'border border-red-300 bg-red-50' : ''}`}><div className="text-sm font-bold text-stone-700">{item.name} <span className="text-xs font-normal text-stone-400">/ 餘{item.currentQty}</span></div><div className="flex items-center gap-2">{item.isUncountable ? (<span className="text-xs text-stone-400 bg-stone-100 px-2 py-1 rounded">不扣庫存</span>) : (<><span className="text-xs">用量</span><input type="number" min="0" max={item.currentQty} className={`w-12 text-center border rounded font-bold ${item.deductQty > item.currentQty ? 'text-red-500 border-red-500' : ''}`} value={item.deductQty} onChange={(e) => {const val = parseInt(e.target.value)||0; const newItems = [...deductionTarget.items]; newItems[idx].deductQty = val; setDeductionTarget({...deductionTarget, items: newItems}); validateDeductionInput(newItems);}} /></>)}</div></div>))} {deductionError && <div className="text-xs text-red-500 text-center font-bold">用量不能超過剩餘庫存！</div>}</div><div className="flex gap-2"><button onClick={() => setShowDeductionConfig(false)} className="flex-1 py-2 bg-stone-100 text-stone-500 rounded-xl text-sm">取消</button><button onClick={confirmDeductionConfig} disabled={deductionError} className={`flex-[2] py-2 text-white rounded-xl font-bold text-sm ${deductionError ? 'bg-stone-300 cursor-not-allowed' : 'bg-[#93C572]'}`}>確認設定</button></div></div></div>}
+              {showEndDinnerModal && <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-6 backdrop-blur-md"><div className="bg-white w-full max-w-sm rounded-3xl p-8 text-center shadow-2xl animate-fade-in-up"><div className="w-20 h-20 bg-[#EFE0D1] rounded-full flex items-center justify-center mx-auto mb-4"><HeartHandshake size={40} className="text-[#8B4513]" /></div><h2 className="text-2xl font-bold text-[#8B4513] mb-2">晚餐辛苦了！</h2><p className="text-stone-500 mb-4">今日菜單總結：</p><div className="bg-[#FAF0E6] p-4 rounded-xl mb-6 text-left max-h-32 overflow-y-auto">{finishedDishesNames.length > 0 ? (<ul className="space-y-1">{finishedDishesNames.map((name, i) => (<li key={i} className="text-sm text-[#8B4513] flex items-center gap-2"><CheckCircle2 size={14} className="text-[#93C572]"/> {name}</li>))}</ul>) : <p className="text-xs text-stone-400 text-center">沒有完成任何料理</p>}</div><button onClick={closeEndDinner} className="w-full bg-[#8B4513] text-white py-3 rounded-2xl font-bold text-lg shadow-lg hover:bg-[#6d3610]">晚安，關閉</button></div></div>}
+              {viewingRecipe && <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setViewingRecipe(null)}><div className="bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl relative" onClick={e => e.stopPropagation()}><button onClick={() => setViewingRecipe(null)} className="absolute top-4 right-4 text-stone-400 hover:text-stone-600"><X size={24} /></button><h3 className="text-2xl font-bold text-[#8B4513] mb-2">{viewingRecipe.name}</h3><div className="max-h-[60vh] overflow-y-auto mt-4 text-sm text-stone-600"><h4 className="font-bold text-stone-700 mb-1 flex items-center gap-1"><BookOpen size={16}/> 食材</h4><div className="flex flex-wrap gap-2 mb-4">{viewingRecipe.ingredients.map((ing,i)=><span key={i} className="bg-[#FAF0E6] text-[#8B4513] px-2 py-1 rounded-lg">{ing}</span>)}</div><h4 className="font-bold text-stone-700 mb-1 flex items-center gap-1"><CookingPot size={16}/> 做法</h4><div className="whitespace-pre-line leading-relaxed">{viewingRecipe.steps || "暫無詳細步驟"}</div></div><button onClick={() => setViewingRecipe(null)} className="w-full mt-6 bg-[#EFE0D1] text-[#8B4513] font-bold py-3 rounded-2xl">關閉</button></div></div>}
+
+              <nav className="fixed bottom-0 w-full bg-[#FDF5E6] border-t border-[#D2B48C] pb-safe z-30 flex justify-around max-w-md mx-auto">
+                  <TabButton id="planner" icon={ClipboardList} label="晚餐規劃" />
+                  <TabButton id="today" icon={Coffee} label="今日菜單" />
+                  <TabButton id="fridge" icon={Refrigerator} label="冰箱庫存" />
+                  <TabButton id="recipes" icon={BookHeart} label="食譜管理" />
+              </nav>
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<MrsOuSmartFridge />);
+    </script>
+</body>
+</html>
